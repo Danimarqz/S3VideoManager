@@ -12,7 +12,7 @@ using S3VideoManager.Models;
 
 namespace S3VideoManager.Services;
 
-internal class S3Service : IDisposable, IAsyncDisposable
+public class S3Service : IDisposable, IAsyncDisposable
 {
     private readonly AwsSettings _settings;
     private readonly IAmazonS3 _s3Client;
@@ -103,6 +103,21 @@ internal class S3Service : IDisposable, IAsyncDisposable
 
         classes.Sort(StringComparer.OrdinalIgnoreCase);
         return classes;
+    }
+
+    public async Task CreateSubjectAsync(string subjectName, CancellationToken cancellationToken = default)
+    {
+        var normalizedSubject = NormalizeKeySegment(subjectName, nameof(subjectName));
+        var folderKey = $"{normalizedSubject}/";
+
+        var request = new PutObjectRequest
+        {
+            BucketName = _settings.Bucket,
+            Key = folderKey,
+            ContentBody = string.Empty
+        };
+
+        await _s3Client.PutObjectAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteClassAsync(string subjectName, string className, CancellationToken cancellationToken = default)

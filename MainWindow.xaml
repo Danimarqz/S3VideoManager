@@ -1,12 +1,292 @@
-﻿<Window x:Class="S3VideoManager.MainWindow"
+<Window x:Class="S3VideoManager.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:S3VideoManager"
+        xmlns:models="clr-namespace:S3VideoManager.Models"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="S3 Video Manager"
+        Width="1200"
+        Height="720"
+        MinWidth="1100"
+        MinHeight="650"
+        Background="{StaticResource WindowBackgroundBrush}">
+    <Window.Resources>
+        <LinearGradientBrush x:Key="HeroGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#1C2340" Offset="0" />
+            <GradientStop Color="#0C1224" Offset="1" />
+        </LinearGradientBrush>
 
+        <Style x:Key="CardListBoxItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Card"
+                                Background="#151C33"
+                                CornerRadius="12"
+                                Padding="14"
+                                BorderBrush="#232D4C"
+                                BorderThickness="1">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="#25336A" />
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CardListViewItemStyle" TargetType="ListViewItem">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Border x:Name="Card"
+                                Background="#151C33"
+                                CornerRadius="12"
+                                Padding="16"
+                                BorderBrush="#232D4C"
+                                BorderThickness="1">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="#25336A" />
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Padding="20"
+                CornerRadius="18"
+                Background="{StaticResource HeroGradient}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="S3 Video Manager"
+                               Foreground="White"
+                               FontSize="28"
+                               FontWeight="Bold" />
+                    <TextBlock Text="Administra materias y clases HLS directamente en S3."
+                               Foreground="#A2B9FF"
+                               Margin="0,6,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button Content="Refrescar"
+                            Command="{Binding RefreshSubjectsCommand}"
+                            IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main content -->
+        <Grid Grid.Row="1"
+              Margin="0,24,0,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Subjects -->
+            <Border Background="{StaticResource PanelBackgroundBrush}"
+                    CornerRadius="20"
+                    Padding="24">
+                <StackPanel>
+                    <TextBlock Text="Materias"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="White" />
+                    <TextBlock Text="Selecciona una para ver sus clases."
+                               Foreground="#7E8AAE"
+                               Margin="0,4,0,12" />
+                    <Button Content="+ Nueva materia"
+                            Height="38"
+                            Margin="0,4,0,0"
+                            Click="NewSubjectButton_Click"
+                            IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
+                    <ListBox x:Name="SubjectsList"
+                             Margin="0,16,0,0"
+                             ItemsSource="{Binding Subjects}"
+                             SelectedItem="{Binding SelectedSubject}"
+                             ItemContainerStyle="{StaticResource CardListBoxItemStyle}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:SubjectModel}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               Foreground="White" />
+                                    <TextBlock Text="Explora sus clases"
+                                               Foreground="#7581A6"
+                                               FontSize="12"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Classes & activity -->
+            <Grid Grid.Column="1"
+                  Margin="24,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="200" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Clases"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal">
+                        <Button Content="Subir clase"
+                                Width="150"
+                                Margin="0,0,10,0"
+                                Click="UploadClassButton_Click"
+                                IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
+                        <Button Content="Eliminar clase"
+                                Width="150"
+                                Click="DeleteClassButton_Click"
+                                IsEnabled="{Binding SelectedClass, Converter={StaticResource NullToBooleanConverter}}" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Background="{StaticResource PanelBackgroundBrush}"
+                        CornerRadius="20"
+                        Padding="20"
+                        Margin="0,8,0,16">
+                    <ListView ItemsSource="{Binding Classes}"
+                              SelectedItem="{Binding SelectedClass}"
+                              ItemContainerStyle="{StaticResource CardListViewItemStyle}"
+                              BorderThickness="0"
+                              Background="Transparent">
+                        <ListView.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ClassModel}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="White" />
+                                        <TextBlock Text="{Binding Prefix}"
+                                                   Foreground="#7A88AF"
+                                                   FontSize="12" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1"
+                                            Background="#1F2A4C"
+                                            CornerRadius="8"
+                                            Padding="10,4"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="HLS"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontWeight="Bold" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
+
+                <Border Grid.Row="2"
+                        Background="{StaticResource PanelSecondaryBrush}"
+                        CornerRadius="18"
+                        Padding="18">
+                    <StackPanel>
+                        <TextBlock Text="Actividad reciente"
+                                   Foreground="White"
+                                   FontWeight="SemiBold" />
+                        <ScrollViewer Margin="0,8,0,0"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding ActivityLog}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"
+                                                   Margin="0,2"
+                                                   Foreground="#9DA9CE" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Status -->
+        <Grid Grid.Row="2"
+              VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ProgressBar Grid.Column="0"
+                         Width="200"
+                         Height="10"
+                         Margin="0,0,16,0"
+                         Minimum="0"
+                         Maximum="1"
+                         Value="{Binding OperationProgress}"
+                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding StatusMessage}"
+                       Foreground="#A6B4DA" />
+        </Grid>
+
+        <!-- Busy overlay -->
+        <Border Background="#88090F25"
+                Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#151C33"
+                    Padding="24"
+                    CornerRadius="16"
+                    Width="260">
+                <StackPanel>
+                    <ProgressBar IsIndeterminate="True" Height="6" />
+                    <TextBlock Text="Conectando..."
+                               HorizontalAlignment="Center"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               Margin="0,12,0,0" />
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </Window>

@@ -9,8 +9,11 @@ using S3VideoManager.Models;
 
 namespace S3VideoManager.Services;
 
-internal class FfmpegService
+public class FfmpegService
 {
+    private static readonly SemaphoreSlim NvencProbeLock = new(1, 1);
+    private static bool? _nvencAvailable;
+
     private readonly TranscodeSettings _settings;
 
     public FfmpegService(TranscodeSettings settings)
@@ -40,8 +43,45 @@ internal class FfmpegService
         percentProgress?.Report(0);
 
         var ffmpegPath = await FfmpegExtractor.GetExecutablePathAsync(cancellationToken).ConfigureAwait(false);
-        var arguments = BuildArguments(inputFilePath, finalOutputDirectory);
+        var supportsNvenc = await IsNvencAvailableAsync(ffmpegPath, logProgress, cancellationToken).ConfigureAwait(false);
+        var useHardware = supportsNvenc;
 
+        while (true)
+        {
+            var arguments = BuildArguments(inputFilePath, finalOutputDirectory, useHardware);
+            var exitCode = await RunFfmpegProcessAsync(ffmpegPath, arguments, logProgress, cancellationToken).ConfigureAwait(false);
+
+            if (exitCode == 0)
+            {
+                break;
+            }
+
+            if (useHardware)
+            {
+                logProgress?.Report("No se pudo usar NVENC, reintentando con codificación por CPU (libx264)...");
+                useHardware = false;
+                continue;
+            }
+
+            throw new InvalidOperationException($"ffmpeg exited with code {exitCode}. See log for details.");
+        }
+
+        var masterPlaylist = Path.Combine(finalOutputDirectory, "master.m3u8");
+        if (!File.Exists(masterPlaylist))
+        {
+            throw new InvalidOperationException("ffmpeg finished without generating master.m3u8.");
+        }
+
+        percentProgress?.Report(1);
+        return finalOutputDirectory;
+    }
+
+    private static async Task<int> RunFfmpegProcessAsync(
+        string ffmpegPath,
+        string arguments,
+        IProgress<string>? logProgress,
+        CancellationToken cancellationToken)
+    {
         var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var process = new Process
         {
@@ -85,7 +125,7 @@ internal class FfmpegService
                 }
                 catch (InvalidOperationException)
                 {
-                    // Process might have already exited.
+                    // ignored
                 }
             }
         });
@@ -98,20 +138,69 @@ internal class FfmpegService
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        var exitCode = await tcs.Task.ConfigureAwait(false);
-        if (exitCode != 0)
+        return await tcs.Task.ConfigureAwait(false);
+    }
+
+    private static async Task<bool> IsNvencAvailableAsync(string ffmpegPath, IProgress<string>? logProgress, CancellationToken cancellationToken)
+    {
+        if (_nvencAvailable.HasValue)
         {
-            throw new InvalidOperationException($"ffmpeg exited with code {exitCode}. See log for details.");
+            return _nvencAvailable.Value;
         }
 
-        var masterPlaylist = Path.Combine(finalOutputDirectory, "master.m3u8");
-        if (!File.Exists(masterPlaylist))
+        await NvencProbeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            throw new InvalidOperationException("ffmpeg finished without generating master.m3u8.");
-        }
+            if (_nvencAvailable.HasValue)
+            {
+                return _nvencAvailable.Value;
+            }
 
-        percentProgress?.Report(1);
-        return finalOutputDirectory;
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = "-hide_banner -encoders",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            try
+            {
+                process.Start();
+            }
+            catch
+            {
+                _nvencAvailable = false;
+                return _nvencAvailable.Value;
+            }
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            var combined = (await outputTask.ConfigureAwait(false)) + (await errorTask.ConfigureAwait(false));
+            var hasNvenc = process.ExitCode == 0 &&
+                           combined.IndexOf("h264_nvenc", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            _nvencAvailable = hasNvenc;
+            logProgress?.Report(hasNvenc
+                ? "NVENC disponible: usando aceleración por GPU."
+                : "NVENC no disponible: se usará codificación por CPU.");
+            return hasNvenc;
+        }
+        catch
+        {
+            _nvencAvailable = false;
+            logProgress?.Report("No se pudo detectar NVENC, se usará codificación por CPU.");
+            return false;
+        }
+        finally
+        {
+            NvencProbeLock.Release();
+        }
     }
 
     private static string PrepareOutputDirectory(string inputFilePath, string? requestedDirectory)
@@ -129,20 +218,32 @@ internal class FfmpegService
         return directory;
     }
 
-    private string BuildArguments(string inputFilePath, string outputDirectory)
+    private string BuildArguments(string inputFilePath, string outputDirectory, bool useHardware)
     {
         var playlistPath = Path.Combine(outputDirectory, "master.m3u8");
         var segmentPattern = Path.Combine(outputDirectory, "segment_%05d.ts");
 
         var builder = new StringBuilder();
         builder.Append("-y ");
-        builder.Append("-hwaccel cuda ");
-        builder.AppendFormat("-i \"{0}\" ", inputFilePath);
-        builder.Append("-vf \"scale=-2:720,fps=30\" ");
-        builder.Append("-c:v h264_nvenc ");
-        builder.Append("-preset slow ");
-        builder.Append("-rc:v vbr ");
-        builder.Append("-cq 28 ");
+
+        if (useHardware)
+        {
+            builder.Append("-hwaccel cuda ");
+            builder.AppendFormat("-i \"{0}\" ", inputFilePath);
+            builder.Append("-vf \"scale=-2:720,fps=30\" ");
+            builder.Append("-c:v h264_nvenc ");
+            builder.Append("-preset slow ");
+            builder.Append("-rc:v vbr ");
+            builder.Append("-cq 28 ");
+        }
+        else
+        {
+            builder.AppendFormat("-i \"{0}\" ", inputFilePath);
+            builder.Append("-vf \"scale=-2:720,fps=30\" ");
+            builder.Append("-c:v libx264 ");
+            builder.Append("-preset slow ");
+        }
+
         builder.AppendFormat("-b:v {0} ", _settings.VideoBitrate);
         builder.AppendFormat("-maxrate {0} ", _settings.VideoBitrate);
         builder.Append("-c:a aac ");

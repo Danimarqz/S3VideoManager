@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,6 +11,7 @@ internal static class FfmpegExtractor
 {
     private const string ResourceName = "S3VideoManager.Resources.ffmpeg.exe";
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly string ResourceSignature = ComputeResourceSignature();
     private static string? _cachedPath;
 
     public static async Task<string> GetExecutablePathAsync(CancellationToken cancellationToken = default)
@@ -29,17 +31,25 @@ internal static class FfmpegExtractor
 
             var targetDirectory = Path.Combine(Path.GetTempPath(), "S3VideoManager");
             Directory.CreateDirectory(targetDirectory);
-            var targetPath = Path.Combine(targetDirectory, "ffmpeg.exe");
+            var fileName = $"ffmpeg_{ResourceSignature}.exe";
+            var targetPath = Path.Combine(targetDirectory, fileName);
 
-            await using var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourceName)
-                ?? throw new InvalidOperationException($"Embedded resource '{ResourceName}' not found.");
-
-            var resourceLength = resourceStream.Length;
-            if (NeedsWrite(targetPath, resourceLength))
+            if (!File.Exists(targetPath))
             {
-                resourceStream.Position = 0;
-                await using var fileStream = File.Open(targetPath, FileMode.Create, FileAccess.Write, FileShare.Read);
-                await resourceStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+                await using var resourceStream = OpenResourceStream();
+                try
+                {
+                    await using var fileStream = File.Open(targetPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+                    await resourceStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    // If another process created the file concurrently, fall through and use it.
+                    if (!File.Exists(targetPath))
+                    {
+                        throw;
+                    }
+                }
             }
 
             _cachedPath = targetPath;
@@ -51,22 +61,17 @@ internal static class FfmpegExtractor
         }
     }
 
-    private static bool NeedsWrite(string targetPath, long resourceLength)
+    private static Stream OpenResourceStream()
     {
-        if (!File.Exists(targetPath))
-        {
-            return true;
-        }
+        return Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourceName)
+               ?? throw new InvalidOperationException($"Embedded resource '{ResourceName}' not found.");
+    }
 
-        try
-        {
-            var fileInfo = new FileInfo(targetPath);
-            return fileInfo.Length != resourceLength;
-        }
-        catch (IOException)
-        {
-            // If we can't read the file, attempt to overwrite it during extraction.
-            return true;
-        }
+    private static string ComputeResourceSignature()
+    {
+        using var stream = OpenResourceStream();
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(stream);
+        return Convert.ToHexString(hash);
     }
 }
