@@ -13,7 +13,8 @@
         MinHeight="650"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStyle="None"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        Icon="pack://application:,,,/Resources/AppIcon.ico">
     <WindowChrome.WindowChrome>
         <chrome:WindowChrome CaptionHeight="0"
                              GlassFrameThickness="0"
