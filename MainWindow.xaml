@@ -99,6 +99,9 @@
                     <Button Content="Refrescar"
                             Command="{Binding RefreshSubjectsCommand}"
                             IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
+                    <Button Content="Ver actividad"
+                            Margin="12,0,0,0"
+                            Click="OpenActivityButton_Click" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -115,23 +118,35 @@
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     CornerRadius="20"
                     Padding="24">
-                <StackPanel>
-                    <TextBlock Text="Materias"
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="Materias"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="White" />
-                    <TextBlock Text="Selecciona una para ver sus clases."
+                    <TextBlock Grid.Row="1"
+                               Text="Selecciona una para ver sus clases."
                                Foreground="#7E8AAE"
                                Margin="0,4,0,12" />
-                    <Button Content="+ Nueva materia"
+                    <Button Grid.Row="2"
+                            Content="+ Nueva materia"
                             Height="38"
                             Margin="0,4,0,0"
                             Click="NewSubjectButton_Click"
                             IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
-                    <ListBox x:Name="SubjectsList"
+                    <ListBox Grid.Row="3"
+                             x:Name="SubjectsList"
                              Margin="0,16,0,0"
                              ItemsSource="{Binding Subjects}"
                              SelectedItem="{Binding SelectedSubject}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              ItemContainerStyle="{StaticResource CardListBoxItemStyle}">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:SubjectModel}">
@@ -147,7 +162,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Classes & activity -->
@@ -156,7 +171,6 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="200" />
                 </Grid.RowDefinitions>
 
                 <Grid Margin="0,0,0,8">
@@ -224,28 +238,6 @@
                     </ListView>
                 </Border>
 
-                <Border Grid.Row="2"
-                        Background="{StaticResource PanelSecondaryBrush}"
-                        CornerRadius="18"
-                        Padding="18">
-                    <StackPanel>
-                        <TextBlock Text="Actividad reciente"
-                                   Foreground="White"
-                                   FontWeight="SemiBold" />
-                        <ScrollViewer Margin="0,8,0,0"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding ActivityLog}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}"
-                                                   Margin="0,2"
-                                                   Foreground="#9DA9CE" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </StackPanel>
-                </Border>
             </Grid>
         </Grid>
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,8 @@ public partial class MainViewModel : ObservableObject
     private readonly S3Service _s3Service;
     private readonly FfmpegService _ffmpegService;
     private string? _pendingSubjectName;
+    private bool _forceRefreshPending;
+    private readonly Dictionary<string, IReadOnlyList<string>> _classesCache = new(StringComparer.OrdinalIgnoreCase);
 
     public ObservableCollection<SubjectModel> Subjects { get; } = new();
     public ObservableCollection<ClassModel> Classes { get; } = new();
@@ -50,7 +53,7 @@ public partial class MainViewModel : ObservableObject
         _ffmpegService = ffmpegService ?? throw new ArgumentNullException(nameof(ffmpegService));
 
         RefreshSubjectsCommand = new AsyncRelayCommand(LoadSubjectsAsync, () => !IsBusy && !IsRefreshing);
-        RefreshClassesCommand = new AsyncRelayCommand(LoadClassesAsync, () => !IsBusy && !IsRefreshing && SelectedSubject is not null);
+        RefreshClassesCommand = new AsyncRelayCommand(() => LoadClassesAsync(forceRefresh: true), () => !IsBusy && !IsRefreshing && SelectedSubject is not null);
         DeleteClassCommand = new AsyncRelayCommand(DeleteSelectedClassAsync, () => !IsBusy && SelectedClass is not null);
     }
 
@@ -67,6 +70,9 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = "Cargando materias...";
             Subjects.Clear();
             Classes.Clear();
+            _classesCache.Clear();
+            _pendingSubjectName = null;
+            _forceRefreshPending = false;
             SelectedSubject = null;
             var subjects = await Task.Run(async () => await _s3Service.GetSubjectsAsync()).ConfigureAwait(true);
             foreach (var subjectName in subjects)
@@ -93,9 +99,10 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    public async Task LoadClassesAsync()
+    public async Task LoadClassesAsync(bool forceRefresh = false)
     {
-        if (SelectedSubject is null)
+        var currentSubject = SelectedSubject;
+        if (currentSubject is null)
         {
             Classes.Clear();
             return;
@@ -103,25 +110,26 @@ public partial class MainViewModel : ObservableObject
 
         if (IsBusy || IsRefreshing)
         {
-            _pendingSubjectName = SelectedSubject.Name;
+            _pendingSubjectName = currentSubject.Name;
+            _forceRefreshPending |= forceRefresh;
             return;
         }
 
-        var currentSubject = SelectedSubject;
+        if (!forceRefresh && _classesCache.TryGetValue(currentSubject.Name, out var cachedClasses))
+        {
+            PopulateClasses(currentSubject.Name, cachedClasses);
+            StatusMessage = $"Clases en cache para {currentSubject.Name}.";
+            return;
+        }
+
         try
         {
             IsRefreshing = true;
             StatusMessage = $"Cargando clases de {currentSubject.Name}...";
-            Classes.Clear();
-
             var classNames = await Task.Run(async () => await _s3Service.GetClassesAsync(currentSubject.Name)).ConfigureAwait(true);
-            foreach (var className in classNames)
-            {
-                var prefix = $"{currentSubject.Name}/{className}".Replace("//", "/");
-                Classes.Add(new ClassModel(className, $"{prefix}/"));
-            }
-
-            SelectedClass = Classes.FirstOrDefault();
+            var classList = classNames.ToList();
+            _classesCache[currentSubject.Name] = classList;
+            PopulateClasses(currentSubject.Name, classList);
             StatusMessage = $"Clases actualizadas para {currentSubject.Name}.";
             AddLog($"Clases de {currentSubject.Name} actualizadas ({Classes.Count}).");
         }
@@ -133,15 +141,7 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsRefreshing = false;
-            if (_pendingSubjectName is not null)
-            {
-                var pending = _pendingSubjectName;
-                _pendingSubjectName = null;
-                if (SelectedSubject?.Name == pending)
-                {
-                    _ = LoadClassesAsync();
-                }
-            }
+            TryLoadPendingClasses();
         }
     }
 
@@ -258,7 +258,7 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = $"Clase '{className}' subida correctamente.";
             AddLog($"Clase '{className}' subida a {SelectedSubject.Name}.");
 
-            await LoadClassesAsync().ConfigureAwait(true);
+            await LoadClassesAsync(forceRefresh: true).ConfigureAwait(true);
             return true;
         }
         catch (Exception ex)
@@ -306,7 +306,7 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = $"Eliminando '{SelectedClass.Name}'...";
             await _s3Service.DeleteClassAsync(SelectedSubject.Name, SelectedClass.Name).ConfigureAwait(true);
             AddLog($"Clase '{SelectedClass.Name}' eliminada de {SelectedSubject.Name}.");
-            await LoadClassesAsync().ConfigureAwait(true);
+            await LoadClassesAsync(forceRefresh: true).ConfigureAwait(true);
             StatusMessage = "Clase eliminada.";
             return true;
         }
@@ -387,14 +387,9 @@ public partial class MainViewModel : ObservableObject
         RefreshClassesCommand.NotifyCanExecuteChanged();
         DeleteClassCommand.NotifyCanExecuteChanged();
 
-        if (!value && _pendingSubjectName is not null && SelectedSubject?.Name == _pendingSubjectName)
+        if (!value)
         {
-            var pending = _pendingSubjectName;
-            _pendingSubjectName = null;
-            if (!string.IsNullOrEmpty(pending))
-            {
-                _ = LoadClassesAsync();
-            }
+            TryLoadPendingClasses();
         }
     }
 
@@ -404,14 +399,39 @@ public partial class MainViewModel : ObservableObject
         RefreshSubjectsCommand.NotifyCanExecuteChanged();
         RefreshClassesCommand.NotifyCanExecuteChanged();
 
-        if (!value && _pendingSubjectName is not null && SelectedSubject?.Name == _pendingSubjectName)
+        if (!value)
         {
-            var pending = _pendingSubjectName;
-            _pendingSubjectName = null;
-            if (!string.IsNullOrEmpty(pending))
-            {
-                _ = LoadClassesAsync();
-            }
+            TryLoadPendingClasses();
         }
+    }
+
+    private void PopulateClasses(string subjectName, IEnumerable<string> classNames)
+    {
+        Classes.Clear();
+        foreach (var className in classNames)
+        {
+            var prefix = $"{subjectName}/{className}".Replace("//", "/");
+            Classes.Add(new ClassModel(className, $"{prefix}/"));
+        }
+
+        SelectedClass = Classes.FirstOrDefault();
+    }
+
+    private void TryLoadPendingClasses()
+    {
+        if (_pendingSubjectName is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(SelectedSubject?.Name, _pendingSubjectName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var forceRefresh = _forceRefreshPending;
+        _pendingSubjectName = null;
+        _forceRefreshPending = false;
+        _ = LoadClassesAsync(forceRefresh);
     }
 }

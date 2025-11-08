@@ -135,6 +135,16 @@ public partial class MainWindow : Window
         await _viewModel.DeleteSelectedClassAsync();
     }
 
+    private void OpenActivityButton_Click(object sender, RoutedEventArgs e)
+    {
+        var activityWindow = new ActivityLogWindow(_viewModel)
+        {
+            Owner = this
+        };
+
+        activityWindow.ShowDialog();
+    }
+
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.IsWorking))
