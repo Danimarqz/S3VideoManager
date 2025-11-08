@@ -98,24 +98,17 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <Border Width="28"
-                            Height="28"
-                            CornerRadius="6"
-                            Background="{StaticResource AccentBrush}">
-                        <TextBlock Text="S3"
-                                   Foreground="White"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   FontSize="14" />
-                    </Border>
-                    <StackPanel Margin="10,0,0,0">
+                    <StackPanel Margin="10,0,0,0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
                         <TextBlock Text="S3 Video Manager"
                                    Foreground="White"
-                                   FontWeight="SemiBold" />
-                        <TextBlock Text="Gestor HLS en S3"
+                                   FontWeight="SemiBold"
+                                   Margin="0,5,6,0" />
+                        <TextBlock Text="· Gestor HLS en S3"
                                    Foreground="#6F7AAA"
-                                   FontSize="11" />
+                                   FontSize="11"
+                                   Margin="0,5,0,0" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2"
@@ -155,7 +148,7 @@
                                    Foreground="White"
                                    FontSize="28"
                                    FontWeight="Bold" />
-                        <TextBlock Text="Administra materias y clases HLS directamente en S3."
+                        <TextBlock Text="Administra materias y clases directamente en S3."
                                    Foreground="#A2B9FF"
                                    Margin="0,6,0,0" />
                     </StackPanel>
@@ -293,7 +286,7 @@
                                                 CornerRadius="8"
                                                 Padding="10,4"
                                                 VerticalAlignment="Center">
-                                            <TextBlock Text="HLS"
+                                            <TextBlock Text="Video HLS"
                                                        Foreground="{StaticResource AccentBrush}"
                                                        FontWeight="Bold" />
                                         </Border>
