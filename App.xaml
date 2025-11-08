@@ -9,12 +9,24 @@
             <Color x:Key="PanelSecondaryColor">#121C32</Color>
             <Color x:Key="AccentColor">#5B6CFF</Color>
             <Color x:Key="AccentHoverColor">#7483FF</Color>
+            <Color x:Key="TitleBarColor">#050913</Color>
+            <Color x:Key="TitleBarBorderColor">#0C1224</Color>
+            <Color x:Key="TitleBarButtonHoverColor">#192341</Color>
+            <Color x:Key="TitleBarButtonPressedColor">#121934</Color>
+            <Color x:Key="TitleBarCloseHoverColor">#B73232</Color>
+            <Color x:Key="TitleBarClosePressedColor">#922626</Color>
 
             <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource WindowBackgroundColor}"/>
             <SolidColorBrush x:Key="PanelBackgroundBrush" Color="{StaticResource PanelBackgroundColor}"/>
             <SolidColorBrush x:Key="PanelSecondaryBrush" Color="{StaticResource PanelSecondaryColor}"/>
             <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
             <SolidColorBrush x:Key="AccentBrushLight" Color="{StaticResource AccentHoverColor}"/>
+            <SolidColorBrush x:Key="TitleBarBrush" Color="{StaticResource TitleBarColor}"/>
+            <SolidColorBrush x:Key="TitleBarBorderBrush" Color="{StaticResource TitleBarBorderColor}"/>
+            <SolidColorBrush x:Key="TitleBarButtonHoverBrush" Color="{StaticResource TitleBarButtonHoverColor}"/>
+            <SolidColorBrush x:Key="TitleBarButtonPressedBrush" Color="{StaticResource TitleBarButtonPressedColor}"/>
+            <SolidColorBrush x:Key="TitleBarCloseHoverBrush" Color="{StaticResource TitleBarCloseHoverColor}"/>
+            <SolidColorBrush x:Key="TitleBarClosePressedBrush" Color="{StaticResource TitleBarClosePressedColor}"/>
 
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <conv:NullToBooleanConverter x:Key="NullToBooleanConverter"/>
@@ -47,6 +59,112 @@
                     <Trigger Property="IsEnabled" Value="False">
                         <Setter Property="Opacity" Value="0.5"/>
                         <Setter Property="Cursor" Value="Arrow"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="TitleBarButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="46"/>
+                <Setter Property="Height" Value="34"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TitleBarButtonHoverBrush}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TitleBarButtonPressedBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="TitleBarCloseButtonStyle" TargetType="Button" BasedOn="{StaticResource TitleBarButtonStyle}">
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TitleBarCloseHoverBrush}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TitleBarClosePressedBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ScrollBarRepeatButtonStyle" TargetType="RepeatButton">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RepeatButton">
+                            <Border Background="Transparent"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="ScrollBarThumbStyle" TargetType="Thumb">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    CornerRadius="6"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="ScrollBar">
+                <Setter Property="Width" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="Background" Value="#0D1425"/>
+                <Setter Property="BorderBrush" Value="#1F2946"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="{TemplateBinding Background}">
+                                <Track x:Name="PART_Track"
+                                       Focusable="False"
+                                       Orientation="{TemplateBinding Orientation}"
+                                       IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.LineUpCommand}"
+                                                      Style="{StaticResource ScrollBarRepeatButtonStyle}"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.LineDownCommand}"
+                                                      Style="{StaticResource ScrollBarRepeatButtonStyle}"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Background="{TemplateBinding Foreground}"
+                                               BorderBrush="{TemplateBinding BorderBrush}"
+                                               Style="{StaticResource ScrollBarThumbStyle}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="Orientation" Value="Horizontal">
+                        <Setter Property="Width" Value="Auto"/>
+                        <Setter Property="Height" Value="12"/>
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource AccentBrushLight}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>

@@ -1,7 +1,9 @@
+using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using S3VideoManager.ViewModels;
@@ -12,6 +14,7 @@ namespace S3VideoManager;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private ActivityLogWindow? _activityWindow;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -21,6 +24,7 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         Loaded += MainWindow_Loaded;
         Unloaded += MainWindow_Unloaded;
+        SetActivityButtonState(false);
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -137,12 +141,17 @@ public partial class MainWindow : Window
 
     private void OpenActivityButton_Click(object sender, RoutedEventArgs e)
     {
-        var activityWindow = new ActivityLogWindow(_viewModel)
+        if (_activityWindow is { IsVisible: true })
         {
-            Owner = this
-        };
+            _activityWindow.Close();
+            return;
+        }
 
-        activityWindow.ShowDialog();
+        _activityWindow = new ActivityLogWindow(_viewModel);
+        _activityWindow.Closed += ActivityWindowOnClosed;
+        PositionActivityWindow(_activityWindow);
+        _activityWindow.Show();
+        SetActivityButtonState(true);
     }
 
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -157,5 +166,124 @@ public partial class MainWindow : Window
     {
         _viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
         Mouse.OverrideCursor = null;
+        if (_activityWindow is not null)
+        {
+            _activityWindow.Closed -= ActivityWindowOnClosed;
+            _activityWindow.Close();
+            _activityWindow = null;
+        }
+
+        SetActivityButtonState(false);
+    }
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ToggleWindowState();
+            return;
+        }
+
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+    }
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleWindowState();
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void ToggleWindowState()
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    private void PositionActivityWindow(Window window)
+    {
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+
+        var hostWidth = ActualWidth > 0 ? ActualWidth : Width;
+        var hostHeight = ActualHeight > 0 ? ActualHeight : Height;
+        var hostLeft = double.IsNaN(Left) ? SystemParameters.WorkArea.Left : Left;
+        var hostTop = double.IsNaN(Top) ? SystemParameters.WorkArea.Top : Top;
+
+        var windowWidth = window.Width;
+        if (double.IsNaN(windowWidth) || windowWidth <= 0)
+        {
+            windowWidth = window.ActualWidth > 0 ? window.ActualWidth : window.MinWidth;
+        }
+
+        if (double.IsNaN(windowWidth) || windowWidth <= 0)
+        {
+            windowWidth = 600;
+        }
+
+        var windowHeight = window.Height;
+        if (double.IsNaN(windowHeight) || windowHeight <= 0)
+        {
+            windowHeight = window.ActualHeight > 0 ? window.ActualHeight : window.MinHeight;
+        }
+
+        if (double.IsNaN(windowHeight) || windowHeight <= 0)
+        {
+            windowHeight = 500;
+        }
+
+        var targetLeft = hostLeft + (hostWidth - windowWidth) / 2;
+        var targetTop = hostTop + (hostHeight - windowHeight) / 2;
+
+        var leftBound = SystemParameters.WorkArea.Left;
+        var topBound = SystemParameters.WorkArea.Top;
+        var rightBound = SystemParameters.WorkArea.Right - windowWidth;
+        var bottomBound = SystemParameters.WorkArea.Bottom - windowHeight;
+
+        window.Left = Math.Max(Math.Min(targetLeft, rightBound), leftBound);
+        window.Top = Math.Max(Math.Min(targetTop, bottomBound), topBound);
+    }
+
+    private void SetActivityButtonState(bool isActive)
+    {
+        if (ActivityButton is null)
+        {
+            return;
+        }
+
+        var brushKey = isActive ? "AccentBrushLight" : "AccentBrush";
+        if (TryFindResource(brushKey) is Brush brush)
+        {
+            ActivityButton.Background = brush;
+        }
+    }
+
+    private void ActivityWindowOnClosed(object? sender, EventArgs e)
+    {
+        if (_activityWindow is not null)
+        {
+            _activityWindow.Closed -= ActivityWindowOnClosed;
+            _activityWindow = null;
+        }
+
+        SetActivityButtonState(false);
     }
 }
