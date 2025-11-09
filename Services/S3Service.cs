@@ -49,12 +49,16 @@ public class S3Service : IDisposable, IAsyncDisposable
         do
         {
             response = await _s3Client.ListObjectsV2Async(request, cancellationToken).ConfigureAwait(false);
-            foreach (var prefix in response.CommonPrefixes)
+            var prefixes = response.CommonPrefixes;
+            if (prefixes is not null)
             {
-                var subject = TrimTrailingSlash(prefix);
-                if (!string.IsNullOrWhiteSpace(subject))
+                foreach (var prefix in prefixes)
                 {
-                    subjects.Add(subject);
+                    var subject = TrimTrailingSlash(prefix);
+                    if (!string.IsNullOrWhiteSpace(subject))
+                    {
+                        subjects.Add(subject);
+                    }
                 }
             }
 
@@ -83,18 +87,22 @@ public class S3Service : IDisposable, IAsyncDisposable
         do
         {
             response = await _s3Client.ListObjectsV2Async(request, cancellationToken).ConfigureAwait(false);
-            foreach (var prefix in response.CommonPrefixes)
+            var prefixes = response.CommonPrefixes;
+            if (prefixes is not null)
             {
-                if (!prefix.StartsWith(subjectPrefix, StringComparison.Ordinal))
+                foreach (var prefix in prefixes)
                 {
-                    continue;
-                }
+                    if (!prefix.StartsWith(subjectPrefix, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
 
-                var remainder = prefix.Substring(subjectPrefix.Length);
-                var className = TrimTrailingSlash(remainder);
-                if (!string.IsNullOrWhiteSpace(className))
-                {
-                    classes.Add(className);
+                    var remainder = prefix.Substring(subjectPrefix.Length);
+                    var className = TrimTrailingSlash(remainder);
+                    if (!string.IsNullOrWhiteSpace(className))
+                    {
+                        classes.Add(className);
+                    }
                 }
             }
 
@@ -138,11 +146,6 @@ public class S3Service : IDisposable, IAsyncDisposable
             foreach (var s3Object in response.S3Objects)
             {
                 keysBuffer.Add(new KeyVersion { Key = s3Object.Key });
-                if (keysBuffer.Count == 1000)
-                {
-                    await DeleteBatchAsync(keysBuffer, cancellationToken).ConfigureAwait(false);
-                    keysBuffer.Clear();
-                }
             }
 
             request.ContinuationToken = response.NextContinuationToken;
@@ -227,9 +230,9 @@ public class S3Service : IDisposable, IAsyncDisposable
 
         var deleteRequest = new DeleteObjectsRequest
         {
-            BucketName = _settings.Bucket
+            BucketName = _settings.Bucket,
+            Objects = [.. keys]
         };
-        deleteRequest.Objects.AddRange(keys);
 
         await _s3Client.DeleteObjectsAsync(deleteRequest, cancellationToken).ConfigureAwait(false);
     }

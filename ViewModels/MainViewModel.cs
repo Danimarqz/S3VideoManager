@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using S3VideoManager.Models;
@@ -18,10 +21,13 @@ public partial class MainViewModel : ObservableObject
     private string? _pendingSubjectName;
     private bool _forceRefreshPending;
     private readonly Dictionary<string, IReadOnlyList<string>> _classesCache = new(StringComparer.OrdinalIgnoreCase);
+    private string? _pendingClassSelection;
+    private CancellationTokenSource? _transferCts;
 
     public ObservableCollection<SubjectModel> Subjects { get; } = new();
     public ObservableCollection<ClassModel> Classes { get; } = new();
     public ObservableCollection<string> ActivityLog { get; } = new();
+    public ICollectionView SubjectsView { get; }
 
     [ObservableProperty]
     private SubjectModel? _selectedSubject;
@@ -41,6 +47,15 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private double _operationProgress;
 
+    [ObservableProperty]
+    private string _subjectFilterText = string.Empty;
+
+    [ObservableProperty]
+    private bool _transferInProgress;
+
+    [ObservableProperty]
+    private string? _activeTransferDescription;
+
     public IAsyncRelayCommand RefreshSubjectsCommand { get; }
     public IAsyncRelayCommand RefreshClassesCommand { get; }
     public IAsyncRelayCommand DeleteClassCommand { get; }
@@ -52,10 +67,15 @@ public partial class MainViewModel : ObservableObject
         _s3Service = s3Service ?? throw new ArgumentNullException(nameof(s3Service));
         _ffmpegService = ffmpegService ?? throw new ArgumentNullException(nameof(ffmpegService));
 
+        SubjectsView = CollectionViewSource.GetDefaultView(Subjects);
+        SubjectsView.Filter = FilterSubject;
+
         RefreshSubjectsCommand = new AsyncRelayCommand(LoadSubjectsAsync, () => !IsBusy && !IsRefreshing);
         RefreshClassesCommand = new AsyncRelayCommand(() => LoadClassesAsync(forceRefresh: true), () => !IsBusy && !IsRefreshing && SelectedSubject is not null);
-        DeleteClassCommand = new AsyncRelayCommand(DeleteSelectedClassAsync, () => !IsBusy && SelectedClass is not null);
+        DeleteClassCommand = new AsyncRelayCommand(DeleteSelectedClassAsync, () => !IsBusy && !TransferInProgress && SelectedClass is { IsBusy: false });
     }
+
+    public bool CanStartTransfer => !IsWorking && !TransferInProgress;
 
     public async Task LoadSubjectsAsync()
     {
@@ -99,7 +119,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    public async Task LoadClassesAsync(bool forceRefresh = false)
+    public async Task LoadClassesAsync(bool forceRefresh = false, string? preferredClassToSelect = null)
     {
         var currentSubject = SelectedSubject;
         if (currentSubject is null)
@@ -112,12 +132,17 @@ public partial class MainViewModel : ObservableObject
         {
             _pendingSubjectName = currentSubject.Name;
             _forceRefreshPending |= forceRefresh;
+            if (!string.IsNullOrWhiteSpace(preferredClassToSelect))
+            {
+                _pendingClassSelection = preferredClassToSelect;
+            }
             return;
         }
 
         if (!forceRefresh && _classesCache.TryGetValue(currentSubject.Name, out var cachedClasses))
         {
             PopulateClasses(currentSubject.Name, cachedClasses);
+            RestoreClassSelection(preferredClassToSelect);
             StatusMessage = $"Clases en cache para {currentSubject.Name}.";
             return;
         }
@@ -130,6 +155,7 @@ public partial class MainViewModel : ObservableObject
             var classList = classNames.ToList();
             _classesCache[currentSubject.Name] = classList;
             PopulateClasses(currentSubject.Name, classList);
+            RestoreClassSelection(preferredClassToSelect);
             StatusMessage = $"Clases actualizadas para {currentSubject.Name}.";
             AddLog($"Clases de {currentSubject.Name} actualizadas ({Classes.Count}).");
         }
@@ -197,7 +223,8 @@ public partial class MainViewModel : ObservableObject
 
     public async Task<bool> UploadClassAsync(string videoFilePath, string className, bool overwriteExisting = false)
     {
-        if (SelectedSubject is null)
+        var subject = SelectedSubject;
+        if (subject is null)
         {
             StatusMessage = "Selecciona una materia primero.";
             return false;
@@ -225,41 +252,62 @@ public partial class MainViewModel : ObservableObject
             return false;
         }
 
-        if (IsBusy)
+        if (!CanStartTransfer)
         {
-            StatusMessage = "Ya hay una operación en curso.";
+            StatusMessage = "Espera a que termine la operación en curso.";
             return false;
         }
 
         string? workDirectory = null;
+        var transferToken = BeginTransfer($"Subiendo '{className}'");
         try
         {
-            IsBusy = true;
             OperationProgress = 0;
             StatusMessage = $"Transcodificando '{className}'...";
 
             var logProgress = new Progress<string>(AddLog);
             var encodeProgress = new Progress<double>(value => OperationProgress = Math.Clamp(value * 0.5, 0, 0.5));
-            workDirectory = await _ffmpegService.TranscodeToHlsAsync(videoFilePath, null, logProgress, encodeProgress)
+            workDirectory = await _ffmpegService.TranscodeToHlsAsync(videoFilePath, null, logProgress, encodeProgress, transferToken)
                 .ConfigureAwait(true);
+
+            transferToken.ThrowIfCancellationRequested();
 
             if (shouldOverwrite)
             {
                 StatusMessage = $"Eliminando versión anterior de '{className}'...";
-                await _s3Service.DeleteClassAsync(SelectedSubject.Name, className).ConfigureAwait(true);
+                await _s3Service.DeleteClassAsync(subject.Name, className, transferToken).ConfigureAwait(true);
                 AddLog($"Clase '{className}' eliminada antes de la nueva subida.");
             }
 
             StatusMessage = $"Subiendo '{className}' a S3...";
             var uploadProgress = new Progress<double>(value => OperationProgress = 0.5 + Math.Clamp(value, 0, 1) * 0.5);
-            await _s3Service.UploadClassAsync(SelectedSubject.Name, className, workDirectory, uploadProgress)
+            await _s3Service.UploadClassAsync(subject.Name, className, workDirectory, uploadProgress, transferToken)
                 .ConfigureAwait(true);
 
+            _classesCache.Remove(subject.Name);
             StatusMessage = $"Clase '{className}' subida correctamente.";
-            AddLog($"Clase '{className}' subida a {SelectedSubject.Name}.");
+            AddLog($"Clase '{className}' subida a {subject.Name}.");
 
-            await LoadClassesAsync(forceRefresh: true).ConfigureAwait(true);
+            var subjectStillSelected = SelectedSubject is not null &&
+                                       string.Equals(SelectedSubject.Name, subject.Name, StringComparison.OrdinalIgnoreCase);
+            if (subjectStillSelected)
+            {
+                await LoadClassesAsync(forceRefresh: true).ConfigureAwait(true);
+            }
+            else
+            {
+                _pendingSubjectName = subject.Name;
+                _forceRefreshPending = true;
+                _pendingClassSelection = className;
+            }
+
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Transferencia cancelada.";
+            AddLog("Transferencia cancelada por el usuario.");
+            return false;
         }
         catch (Exception ex)
         {
@@ -270,7 +318,7 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             OperationProgress = 0;
-            IsBusy = false;
+            EndTransfer();
 
             if (!string.IsNullOrWhiteSpace(workDirectory) && Directory.Exists(workDirectory))
             {
@@ -288,7 +336,10 @@ public partial class MainViewModel : ObservableObject
 
     public async Task<bool> DeleteSelectedClassAsync()
     {
-        if (SelectedSubject is null || SelectedClass is null)
+        var subject = SelectedSubject;
+        var classToDelete = SelectedClass;
+
+        if (subject is null || classToDelete is null)
         {
             StatusMessage = "Selecciona una clase para eliminar.";
             return false;
@@ -300,15 +351,63 @@ public partial class MainViewModel : ObservableObject
             return false;
         }
 
+        if (TransferInProgress)
+        {
+            StatusMessage = "Ya hay una transferencia en curso.";
+            return false;
+        }
+
+        var cancellationToken = BeginTransfer($"Eliminando '{classToDelete.Name}'");
         try
         {
-            IsBusy = true;
-            StatusMessage = $"Eliminando '{SelectedClass.Name}'...";
-            await _s3Service.DeleteClassAsync(SelectedSubject.Name, SelectedClass.Name).ConfigureAwait(true);
-            AddLog($"Clase '{SelectedClass.Name}' eliminada de {SelectedSubject.Name}.");
-            await LoadClassesAsync(forceRefresh: true).ConfigureAwait(true);
+            classToDelete.IsBusy = true;
+            DeleteClassCommand.NotifyCanExecuteChanged();
+            StatusMessage = $"Eliminando '{classToDelete.Name}'...";
+            await _s3Service.DeleteClassAsync(subject.Name, classToDelete.Name, cancellationToken).ConfigureAwait(true);
+            _classesCache.Remove(subject.Name);
+
+            var subjectIsActive = SelectedSubject is not null &&
+                                  string.Equals(SelectedSubject.Name, subject.Name, StringComparison.OrdinalIgnoreCase);
+            string? desiredSelection = null;
+            if (subjectIsActive)
+            {
+                var removedIndex = Classes.IndexOf(classToDelete);
+                if (removedIndex >= 0)
+                {
+                    var wasSelected = ReferenceEquals(SelectedClass, classToDelete);
+                    Classes.RemoveAt(removedIndex);
+                    if (wasSelected)
+                    {
+                        if (Classes.Count == 0)
+                        {
+                            SelectedClass = null;
+                        }
+                        else
+                        {
+                            var nextIndex = Math.Min(removedIndex, Classes.Count - 1);
+                            SelectedClass = Classes[nextIndex];
+                        }
+                    }
+
+                    desiredSelection = SelectedClass?.Name;
+                }
+            }
+
+            AddLog($"Clase '{classToDelete.Name}' eliminada de {subject.Name}.");
+
+            if (subjectIsActive)
+            {
+                await LoadClassesAsync(forceRefresh: true, preferredClassToSelect: desiredSelection).ConfigureAwait(true);
+            }
+
             StatusMessage = "Clase eliminada.";
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Transferencia cancelada.";
+            AddLog("Transferencia cancelada por el usuario.");
+            return false;
         }
         catch (Exception ex)
         {
@@ -318,7 +417,9 @@ public partial class MainViewModel : ObservableObject
         }
         finally
         {
-            IsBusy = false;
+            classToDelete.IsBusy = false;
+            DeleteClassCommand.NotifyCanExecuteChanged();
+            EndTransfer();
         }
     }
 
@@ -383,6 +484,7 @@ public partial class MainViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value)
     {
         OnPropertyChanged(nameof(IsWorking));
+        OnPropertyChanged(nameof(CanStartTransfer));
         RefreshSubjectsCommand.NotifyCanExecuteChanged();
         RefreshClassesCommand.NotifyCanExecuteChanged();
         DeleteClassCommand.NotifyCanExecuteChanged();
@@ -396,12 +498,28 @@ public partial class MainViewModel : ObservableObject
     partial void OnIsRefreshingChanged(bool value)
     {
         OnPropertyChanged(nameof(IsWorking));
+        OnPropertyChanged(nameof(CanStartTransfer));
         RefreshSubjectsCommand.NotifyCanExecuteChanged();
         RefreshClassesCommand.NotifyCanExecuteChanged();
 
         if (!value)
         {
             TryLoadPendingClasses();
+        }
+    }
+
+    private void RestoreClassSelection(string? className)
+    {
+        if (string.IsNullOrWhiteSpace(className))
+        {
+            return;
+        }
+
+        var match = Classes.FirstOrDefault(c =>
+            c.Name.Equals(className, StringComparison.OrdinalIgnoreCase));
+        if (match is not null)
+        {
+            SelectedClass = match;
         }
     }
 
@@ -432,6 +550,66 @@ public partial class MainViewModel : ObservableObject
         var forceRefresh = _forceRefreshPending;
         _pendingSubjectName = null;
         _forceRefreshPending = false;
-        _ = LoadClassesAsync(forceRefresh);
+        var classSelection = _pendingClassSelection;
+        _pendingClassSelection = null;
+        _ = LoadClassesAsync(forceRefresh, classSelection);
+    }
+
+    private CancellationToken BeginTransfer(string description)
+    {
+        if (TransferInProgress)
+        {
+            throw new InvalidOperationException("Transfer already running.");
+        }
+
+        _transferCts = new CancellationTokenSource();
+        ActiveTransferDescription = description;
+        TransferInProgress = true;
+        return _transferCts.Token;
+    }
+
+    private void EndTransfer()
+    {
+        _transferCts?.Dispose();
+        _transferCts = null;
+        TransferInProgress = false;
+        ActiveTransferDescription = null;
+    }
+
+    public bool CancelActiveTransfer()
+    {
+        if (_transferCts is null)
+        {
+            return false;
+        }
+
+        _transferCts.Cancel();
+        return true;
+    }
+
+    partial void OnSubjectFilterTextChanged(string value)
+    {
+        SubjectsView.Refresh();
+    }
+
+    partial void OnTransferInProgressChanged(bool value)
+    {
+        DeleteClassCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanStartTransfer));
+    }
+
+    private bool FilterSubject(object? item)
+    {
+        if (item is not SubjectModel subject)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(SubjectFilterText))
+        {
+            return true;
+        }
+
+        return subject.Name.Contains(SubjectFilterText, StringComparison.OrdinalIgnoreCase);
     }
 }

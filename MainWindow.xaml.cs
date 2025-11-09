@@ -24,7 +24,10 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         Loaded += MainWindow_Loaded;
         Unloaded += MainWindow_Unloaded;
+        StateChanged += MainWindow_StateChanged;
+        Closing += MainWindow_Closing;
         SetActivityButtonState(false);
+        UpdateMaximizeButtonIcon();
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -60,8 +63,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_viewModel.IsWorking)
+        if (!_viewModel.CanStartTransfer)
         {
+            MessageBox.Show(this,
+                "Espera a que termine la operación actual.",
+                "Transferencia en curso",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -120,8 +128,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_viewModel.IsWorking)
+        if (_viewModel.TransferInProgress)
         {
+            MessageBox.Show(this,
+                "Espera a que termine la operación actual.",
+                "Transferencia en curso",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -165,6 +178,8 @@ public partial class MainWindow : Window
     private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
     {
         _viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
+        StateChanged -= MainWindow_StateChanged;
+        Closing -= MainWindow_Closing;
         Mouse.OverrideCursor = null;
         if (_activityWindow is not null)
         {
@@ -217,6 +232,12 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
+        UpdateMaximizeButtonIcon();
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        UpdateMaximizeButtonIcon();
     }
 
     private void PositionActivityWindow(Window window)
@@ -285,5 +306,39 @@ public partial class MainWindow : Window
         }
 
         SetActivityButtonState(false);
+    }
+
+    private void UpdateMaximizeButtonIcon()
+    {
+        if (MaximizeButton is null)
+        {
+            return;
+        }
+
+        MaximizeButton.FontFamily = new FontFamily("Segoe MDL2 Assets");
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+    }
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (!_viewModel.TransferInProgress)
+        {
+            return;
+        }
+
+        var description = _viewModel.ActiveTransferDescription ?? "una transferencia en curso";
+        var confirm = MessageBox.Show(this,
+            $"Hay una operación en curso ({description}). Si cierras se cancelará. ¿Quieres continuar?",
+            "Transferencia en curso",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        _viewModel.CancelActiveTransfer();
     }
 }

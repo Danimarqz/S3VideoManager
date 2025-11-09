@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:S3VideoManager.Models"
+        xmlns:converters="clr-namespace:S3VideoManager.Converters"
         xmlns:chrome="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
         Title="S3 Video Manager"
@@ -111,18 +112,22 @@
                                    Margin="0,5,0,0" />
                     </StackPanel>
                 </StackPanel>
-                <StackPanel Grid.Column="2"
-                            Orientation="Horizontal"
-                            HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
                     <Button Style="{StaticResource TitleBarButtonStyle}"
+                            FontFamily="Segoe MDL2 Assets"
                             Click="MinimizeButton_Click"
-                            Content="&#x2013;" />
-                    <Button Style="{StaticResource TitleBarButtonStyle}"
+                            Content="&#xE921;" />
+                    <Button x:Name="MaximizeButton"
+                            Style="{StaticResource TitleBarButtonStyle}"
+                            FontFamily="Segoe MDL2 Assets"
                             Click="MaximizeButton_Click"
-                            Content="&#x25A1;" />
+                            Content="&#xE922;" />
                     <Button Style="{StaticResource TitleBarCloseButtonStyle}"
+                            FontFamily="Segoe MDL2 Assets"
                             Click="CloseButton_Click"
-                            Content="&#x2715;" />
+                            Content="&#xE8BB;" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -181,6 +186,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0"
@@ -192,20 +198,35 @@
                                    Text="Selecciona una para ver sus clases."
                                    Foreground="#7E8AAE"
                                    Margin="0,4,0,12" />
-                        <Button Grid.Row="2"
+                        <Grid Grid.Row="2"
+                              Margin="0,4,0,0">
+                            <TextBox Height="34"
+                                     Padding="10,4"
+                                     VerticalContentAlignment="Center"
+                                     Text="{Binding SubjectFilterText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Filtra por nombre la lista de materias" />
+                            <TextBlock Text="Busca la materia"
+                                       Margin="12,0,0,0"
+                                       Foreground="#6F7AAA"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False"
+                                       Visibility="{Binding SubjectFilterText, Converter={StaticResource StringNullOrEmptyToVisibilityConverter}}" />
+                        </Grid>
+                        <Button Grid.Row="3"
                                 Content="+ Nueva materia"
                                 Height="38"
                                 Margin="0,4,0,0"
                                 Click="NewSubjectButton_Click"
                                 IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
-                        <ListBox Grid.Row="3"
+                        <ListBox Grid.Row="4"
                                  x:Name="SubjectsList"
                                  Margin="0,16,0,0"
-                                 ItemsSource="{Binding Subjects}"
+                                 ItemsSource="{Binding SubjectsView}"
                                  SelectedItem="{Binding SelectedSubject}"
                                  Background="{StaticResource HeroGradient}"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  ItemContainerStyle="{StaticResource CardListBoxItemStyle}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:SubjectModel}">
@@ -247,7 +268,7 @@
                                     Width="150"
                                     Margin="0,0,10,0"
                                     Click="UploadClassButton_Click"
-                                    IsEnabled="{Binding IsWorking, Converter={StaticResource InverseBooleanConverter}}" />
+                                    IsEnabled="{Binding CanStartTransfer}" />
                             <Button Content="Eliminar clase"
                                     Width="150"
                                     Click="DeleteClassButton_Click"
