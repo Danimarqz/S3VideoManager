@@ -93,12 +93,15 @@
                         Margin="0,16,0,16">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding ActivityLog}">
+                        <ItemsControl ItemsSource="{Binding ActivityLog}"
+                                      HorizontalContentAlignment="Stretch">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}"
                                                Margin="0,4"
-                                               Foreground="#9DA9CE" />
+                                               Foreground="#9DA9CE"
+                                               TextWrapping="Wrap"
+                                               TextTrimming="None" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

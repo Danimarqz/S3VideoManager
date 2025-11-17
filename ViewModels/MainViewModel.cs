@@ -267,7 +267,7 @@ public partial class MainViewModel : ObservableObject
 
             var logProgress = new Progress<string>(AddLog);
             var encodeProgress = new Progress<double>(value => OperationProgress = Math.Clamp(value * 0.5, 0, 0.5));
-            workDirectory = await _ffmpegService.TranscodeToHlsAsync(videoFilePath, null, logProgress, encodeProgress, transferToken)
+            workDirectory = await _ffmpegService.TranscodeToHlsAsync(videoFilePath, null, logProgress, encodeProgress, transferToken, className)
                 .ConfigureAwait(true);
 
             transferToken.ThrowIfCancellationRequested();

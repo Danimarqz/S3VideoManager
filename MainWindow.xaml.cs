@@ -1,6 +1,5 @@
-using System;
 using System.ComponentModel;
-using System.Linq;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -85,7 +84,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var nameDialog = new TextPromptWindow("Nueva clase", "¿Cómo quieres llamar a la clase?", "Clase 1")
+        var nameDialog = new TextPromptWindow("Nueva clase", "¿Cómo quieres llamar a la clase?",
+            Path.GetFileNameWithoutExtension(fileDialog.FileName))
         {
             Owner = this
         };

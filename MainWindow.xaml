@@ -4,7 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:S3VideoManager.Models"
-        xmlns:converters="clr-namespace:S3VideoManager.Converters"
         xmlns:chrome="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
         Title="S3 Video Manager"

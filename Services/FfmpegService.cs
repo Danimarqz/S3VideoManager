@@ -27,7 +27,8 @@ public class FfmpegService
         string? outputDirectory = null,
         IProgress<string>? logProgress = null,
         IProgress<double>? percentProgress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? outputName = null)
     {
         if (string.IsNullOrWhiteSpace(inputFilePath))
         {
@@ -48,7 +49,7 @@ public class FfmpegService
 
         while (true)
         {
-            var arguments = BuildArguments(inputFilePath, finalOutputDirectory, useHardware);
+            var arguments = BuildArguments(inputFilePath, finalOutputDirectory, useHardware, outputName);
             var exitCode = await RunFfmpegProcessAsync(ffmpegPath, arguments, logProgress, cancellationToken).ConfigureAwait(false);
 
             if (exitCode == 0)
@@ -66,10 +67,10 @@ public class FfmpegService
             throw new InvalidOperationException($"ffmpeg exited with code {exitCode}. See log for details.");
         }
 
-        var masterPlaylist = Path.Combine(finalOutputDirectory, "master.m3u8");
+        var masterPlaylist = Path.Combine(finalOutputDirectory, $"{outputName}.m3u8");
         if (!File.Exists(masterPlaylist))
         {
-            throw new InvalidOperationException("ffmpeg finished without generating master.m3u8.");
+            throw new InvalidOperationException($"ffmpeg finished without generating {outputName}.m3u8.");
         }
 
         percentProgress?.Report(1);
@@ -218,10 +219,11 @@ public class FfmpegService
         return directory;
     }
 
-    private string BuildArguments(string inputFilePath, string outputDirectory, bool useHardware)
+    private string BuildArguments(string inputFilePath, string outputDirectory, bool useHardware, string? outputName)
     {
-        var playlistPath = Path.Combine(outputDirectory, "master.m3u8");
-        var segmentPattern = Path.Combine(outputDirectory, "segment_%05d.ts");
+        var safeBaseName = SanitizeOutputBaseName(outputName, Path.GetFileNameWithoutExtension(inputFilePath));
+        var playlistPath = Path.Combine(outputDirectory, $"{safeBaseName}.m3u8");
+        var segmentPattern = Path.Combine(outputDirectory, $"{safeBaseName}_%05d.ts");
 
         var builder = new StringBuilder();
         builder.Append("-y ");
@@ -256,5 +258,21 @@ public class FfmpegService
         builder.AppendFormat("\"{0}\"", playlistPath);
 
         return builder.ToString();
+    }
+
+    private static string SanitizeOutputBaseName(string? desiredName, string fallback)
+    {
+        var baseName = string.IsNullOrWhiteSpace(desiredName) ? fallback : desiredName.Trim();
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            baseName = "output";
+        }
+
+        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        {
+            baseName = baseName.Replace(invalidChar, '-');
+        }
+
+        return baseName;
     }
 }
