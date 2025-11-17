@@ -9,6 +9,7 @@ internal static class AppSettingsLoader
 {
     private static readonly object Sync = new();
     private static AppSettings? _cached;
+    private const string EmbeddedAppSettingsResource = "S3VideoManager.appsettings.json";
 
     public static AppSettings GetAppSettings(string? basePath = null, bool forceReload = false)
     {
@@ -24,13 +25,12 @@ internal static class AppSettingsLoader
                 return _cached;
             }
 
-            var path = ResolvePath(basePath);
-            using var stream = File.OpenRead(path);
+            using var stream = OpenSettingsStream(basePath);
 
             var settings = JsonSerializer.Deserialize<AppSettings>(stream, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
-            }) ?? throw new InvalidOperationException($"Unable to deserialize {path}.");
+            }) ?? throw new InvalidOperationException("Unable to deserialize appsettings.json.");
 
             settings.Aws ??= new AwsSettings();
             settings.Transcode ??= new TranscodeSettings();
@@ -43,7 +43,25 @@ internal static class AppSettingsLoader
         }
     }
 
-    private static string ResolvePath(string? basePath)
+    private static Stream OpenSettingsStream(string? basePath)
+    {
+        var path = ResolvePath(basePath);
+        if (!string.IsNullOrEmpty(path))
+        {
+            return File.OpenRead(path);
+        }
+
+        var assembly = typeof(AppSettingsLoader).Assembly;
+        var resourceStream = assembly.GetManifestResourceStream(EmbeddedAppSettingsResource);
+        if (resourceStream is not null)
+        {
+            return resourceStream;
+        }
+
+        throw new FileNotFoundException("Unable to locate appsettings.json.");
+    }
+
+    private static string? ResolvePath(string? basePath)
     {
         if (!string.IsNullOrWhiteSpace(basePath))
         {
@@ -60,6 +78,6 @@ internal static class AppSettingsLoader
             return defaultPath;
         }
 
-        throw new FileNotFoundException("Unable to locate appsettings.json.");
+        return null;
     }
 }
