@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using S3VideoManager.Models;
 using S3VideoManager.ViewModels;
 using S3VideoManager.Views;
 
@@ -150,6 +151,22 @@ public partial class MainWindow : Window
         }
 
         await _viewModel.DeleteSelectedClassAsync();
+    }
+
+    private void CopyClassLabelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not ClassModel classModel)
+        {
+            return;
+        }
+
+        var prefix = classModel.Prefix.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            return;
+        }
+
+        Clipboard.SetText($"[s3:{prefix}]");
     }
 
     private void OpenActivityButton_Click(object sender, RoutedEventArgs e)

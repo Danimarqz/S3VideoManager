@@ -287,30 +287,28 @@
                                   Background="Transparent">
                             <ListView.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:ClassModel}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Name}"
-                                                       FontSize="16"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="White" />
-                                            <TextBlock Text="{Binding Prefix}"
-                                                       Foreground="#7A88AF"
-                                                       FontSize="12" />
-                                        </StackPanel>
-                                        <Border Grid.Column="1"
-                                                Background="#1F2A4C"
-                                                CornerRadius="8"
-                                                Padding="10,4"
-                                                VerticalAlignment="Center">
-                                            <TextBlock Text="Video HLS"
-                                                       Foreground="{StaticResource AccentBrush}"
-                                                       FontWeight="Bold" />
-                                        </Border>
-                                    </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="16"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="White" />
+                                                <TextBlock Text="{Binding Prefix}"
+                                                           Foreground="#7A88AF"
+                                                           FontSize="12" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Content="Copiar etiqueta"
+                                                    Margin="0,0,12,0"
+                                                    Padding="10,4"
+                                                    Click="CopyClassLabelButton_Click"
+                                                    VerticalAlignment="Center" />
+                                        </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>

@@ -93,20 +93,28 @@
                         Margin="0,16,0,16">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding ActivityLog}"
-                                      HorizontalContentAlignment="Stretch">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}"
-                                               Margin="0,4"
-                                               Foreground="#9DA9CE"
-                                               TextWrapping="Wrap"
-                                               TextTrimming="None" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </Border>
+                    <ItemsControl ItemsSource="{Binding ActivityLog}"
+                                  HorizontalContentAlignment="Stretch">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Path=., Mode=OneWay}"
+                                         Margin="0,4"
+                                         Foreground="#9DA9CE"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         IsReadOnly="True"
+                                         Cursor="IBeam"
+                                         HorizontalAlignment="Stretch"
+                                         TextWrapping="Wrap"
+                                         VerticalAlignment="Stretch"
+                                         IsReadOnlyCaretVisible="False"
+                                         FocusVisualStyle="{x:Null}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
 
                 <StackPanel Grid.Row="2"
                             Orientation="Horizontal"
