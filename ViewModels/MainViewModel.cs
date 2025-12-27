@@ -59,6 +59,7 @@ public partial class MainViewModel : ObservableObject
     public IAsyncRelayCommand RefreshSubjectsCommand { get; }
     public IAsyncRelayCommand RefreshClassesCommand { get; }
     public IAsyncRelayCommand DeleteClassCommand { get; }
+    public IRelayCommand CancelTransferCommand { get; }
 
     public bool IsWorking => IsBusy || IsRefreshing;
 
@@ -72,7 +73,9 @@ public partial class MainViewModel : ObservableObject
 
         RefreshSubjectsCommand = new AsyncRelayCommand(LoadSubjectsAsync, () => !IsBusy && !IsRefreshing);
         RefreshClassesCommand = new AsyncRelayCommand(() => LoadClassesAsync(forceRefresh: true), () => !IsBusy && !IsRefreshing && SelectedSubject is not null);
+        RefreshClassesCommand = new AsyncRelayCommand(() => LoadClassesAsync(forceRefresh: true), () => !IsBusy && !IsRefreshing && SelectedSubject is not null);
         DeleteClassCommand = new AsyncRelayCommand(DeleteSelectedClassAsync, () => !IsBusy && !TransferInProgress && SelectedClass is { IsBusy: false });
+        CancelTransferCommand = new RelayCommand(CancelTransfer, () => TransferInProgress);
     }
 
     public bool CanStartTransfer => !IsWorking && !TransferInProgress;
@@ -596,6 +599,12 @@ public partial class MainViewModel : ObservableObject
     {
         DeleteClassCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanStartTransfer));
+        CancelTransferCommand.NotifyCanExecuteChanged();
+    }
+
+    private void CancelTransfer()
+    {
+        CancelActiveTransfer();
     }
 
     private bool FilterSubject(object? item)

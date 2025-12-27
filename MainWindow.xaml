@@ -12,12 +12,13 @@
         MinWidth="1100"
         MinHeight="650"
         Background="{StaticResource WindowBackgroundBrush}"
-        WindowStyle="None"
+        WindowStyle="SingleBorderWindow"
         ResizeMode="CanResize"
         Icon="pack://application:,,,/Resources/AppIcon.ico">
     <WindowChrome.WindowChrome>
         <chrome:WindowChrome CaptionHeight="0"
                              GlassFrameThickness="0"
+                             CornerRadius="0"
                              ResizeBorderThickness="6"
                              UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
@@ -76,9 +77,53 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="RoundedDangerButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#3A1C1C"/>
+            <Setter Property="Foreground" Value="#FF6B6B"/>
+            <Setter Property="BorderBrush" Value="#FF4545"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4A2C2C"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2A0C0C"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=WindowState}" Value="Maximized">
+                        <Setter Property="Margin" Value="8" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -317,22 +362,46 @@
             </Grid>
 
             <Grid Grid.Row="2"
-                  VerticalAlignment="Center">
+                  VerticalAlignment="Center"
+                  Margin="0,16,0,8">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ProgressBar Grid.Column="0"
-                             Width="200"
-                             Height="10"
-                             Margin="0,0,16,0"
-                             Minimum="0"
-                             Maximum="1"
-                             Value="{Binding OperationProgress}"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding StatusMessage}"
-                           Foreground="#A6B4DA" />
+                
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="#A6B4DA"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           TextTrimming="CharacterEllipsis" />
+
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button Content="Cancelar"
+                            Command="{Binding CancelTransferCommand}"
+                            Visibility="{Binding TransferInProgress, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Margin="0,0,24,0"
+                            Style="{StaticResource RoundedDangerButtonStyle}"
+                            MinWidth="120" />
+
+                    <Grid Width="280"
+                          VerticalAlignment="Center">
+                        <ProgressBar Height="16"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Value="{Binding OperationProgress}"
+                                     Visibility="{Binding TransferInProgress, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <TextBlock Text="{Binding OperationProgress, StringFormat={}{0:P0}}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="Black"
+                                   Visibility="{Binding TransferInProgress, Converter={StaticResource BoolToVisibilityConverter}}"
+                                   IsHitTestVisible="False"/>
+                    </Grid>
+                </StackPanel>
             </Grid>
 
             <Border Grid.RowSpan="3"

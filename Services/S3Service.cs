@@ -192,9 +192,14 @@ public class S3Service : IDisposable, IAsyncDisposable
         long uploadedBytes = 0;
         progress?.Report(0);
 
-        foreach (var filePath in files)
+        var parallelOptions = new ParallelOptions
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            MaxDegreeOfParallelism = 10,
+            CancellationToken = cancellationToken
+        };
+
+        await Parallel.ForEachAsync(files, parallelOptions, async (filePath, ct) =>
+        {
             var relativePath = Path.GetRelativePath(sourceDirectory, filePath)
                 .Replace('\\', '/');
             var key = $"{classRoot}/{relativePath}".Replace("//", "/");
@@ -212,11 +217,11 @@ public class S3Service : IDisposable, IAsyncDisposable
                 ContentType = contentType
             };
 
-            await _s3Client.PutObjectAsync(putRequest, cancellationToken).ConfigureAwait(false);
+            await _s3Client.PutObjectAsync(putRequest, ct).ConfigureAwait(false);
 
-            uploadedBytes += fileInfo.Length;
-            progress?.Report((double)uploadedBytes / totalBytes);
-        }
+            var newTotal = Interlocked.Add(ref uploadedBytes, fileInfo.Length);
+            progress?.Report((double)newTotal / totalBytes);
+        }).ConfigureAwait(false);
 
         progress?.Report(1);
     }

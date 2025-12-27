@@ -50,7 +50,7 @@ public class FfmpegService
         while (true)
         {
             var arguments = BuildArguments(inputFilePath, finalOutputDirectory, useHardware, outputName);
-            var exitCode = await RunFfmpegProcessAsync(ffmpegPath, arguments, logProgress, cancellationToken).ConfigureAwait(false);
+            var exitCode = await RunFfmpegProcessAsync(ffmpegPath, arguments, logProgress, percentProgress, cancellationToken).ConfigureAwait(false);
 
             if (exitCode == 0)
             {
@@ -81,9 +81,13 @@ public class FfmpegService
         string ffmpegPath,
         string arguments,
         IProgress<string>? logProgress,
+        IProgress<double>? percentProgress,
         CancellationToken cancellationToken)
     {
         var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        
+        TimeSpan totalDuration = TimeSpan.Zero;
+
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -98,21 +102,34 @@ public class FfmpegService
             EnableRaisingEvents = true
         };
 
-        process.OutputDataReceived += (_, e) =>
+        void HandleOutput(string? data)
         {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                logProgress?.Report(e.Data);
-            }
-        };
+            if (string.IsNullOrWhiteSpace(data)) return;
+            
+            logProgress?.Report(data);
 
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
+            // Parse Duration if not set
+            if (totalDuration == TimeSpan.Zero)
             {
-                logProgress?.Report(e.Data);
+                if (TryExtractDuration(data, out var duration))
+                {
+                    totalDuration = duration;
+                }
             }
-        };
+
+            // Parse Time if duration is known
+            if (totalDuration > TimeSpan.Zero)
+            {
+                if (TryExtractTime(data, out var currentTime))
+                {
+                    var percentage = currentTime.TotalSeconds / totalDuration.TotalSeconds;
+                    percentProgress?.Report(Math.Clamp(percentage, 0, 1.0));
+                }
+            }
+        }
+
+        process.OutputDataReceived += (_, e) => HandleOutput(e.Data);
+        process.ErrorDataReceived += (_, e) => HandleOutput(e.Data);
 
         process.Exited += (_, _) => tcs.TrySetResult(process.ExitCode);
 
@@ -140,6 +157,53 @@ public class FfmpegService
         process.BeginErrorReadLine();
 
         return await tcs.Task.ConfigureAwait(false);
+    }
+
+    private static bool TryExtractDuration(string line, out TimeSpan duration)
+    {
+        duration = TimeSpan.Zero;
+        // Example: Duration: 00:00:30.50, ...
+        const string marker = "Duration: ";
+        var index = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0) return false;
+
+        var start = index + marker.Length;
+        var end = line.IndexOf(',', start);
+        if (end < 0) return false;
+
+        var durationStr = line.Substring(start, end - start);
+        return TimeSpan.TryParse(durationStr, out duration);
+    }
+
+    private static bool TryExtractTime(string line, out TimeSpan time)
+    {
+        time = TimeSpan.Zero;
+        // Example: frame=  150 fps=0.0 q=28.0 size=    1536kB time=00:00:05.00 bitrate=2516.6kbits/s speed=10.0x
+        const string marker = "time=";
+        var index = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0) return false;
+
+        var start = index + marker.Length;
+        var end = line.IndexOf(' ', start);
+        if (end < 0) 
+        {
+             // Sometimes it might be at the end of the line or followed by something else not a space? 
+             // Ideally scan until next key=value pair or space
+             
+             // Simple fallback: read 11 chars (HH:mm:ss.ff)
+             // But time can be variable length if > 24h.
+             // Let's search for the first char that is NOT a digit, colon or dot.
+             end = start;
+             while (end < line.Length && (char.IsDigit(line[end]) || line[end] == ':' || line[end] == '.'))
+             {
+                 end++;
+             }
+        }
+        
+        if (end <= start) return false;
+
+        var timeStr = line.Substring(start, end - start);
+        return TimeSpan.TryParse(timeStr, out time);
     }
 
     private static async Task<bool> IsNvencAvailableAsync(string ffmpegPath, IProgress<string>? logProgress, CancellationToken cancellationToken)
